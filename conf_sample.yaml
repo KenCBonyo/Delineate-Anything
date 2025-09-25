@@ -1,12 +1,6 @@
 model: ["large"] # Model names: "small" or "large". Can be a list.
 method: main # Name of the method subfolder in 'methods'.
 
-# Optional: GeoJSON ROI (Region of Interest)
-# Can be a file path to .geojson file, GeoJSON string, or null for no ROI
-roi_geojson: null
-# Example: roi_geojson: "path/to/ward_boundary.geojson"
-# Example: roi_geojson: '{"type": "Polygon", "coordinates": [[[lng1, lat1], [lng2, lat2], ...]]}'
-
 execution_args:
   src_folder: ""
   temp_folder: ""

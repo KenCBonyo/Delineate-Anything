@@ -2,68 +2,11 @@ from osgeo import gdal, osr
 import numpy as np
 import math
 from tqdm import tqdm
-import json
-from osgeo import ogr
 
 class DataAnalyser:
-    def __init__(self, tiffs, bands, sr, roi_geojson=None):
+    def __init__(self, tiffs, bands, sr):
         self.tiffs = tiffs
         self.bands = bands
-        self.sr = sr
-        self.roi_geojson = roi_geojson
-        self.roi_bounds = None
-        
-        if roi_geojson:
-            self.roi_bounds = self._get_roi_bounds()
-
-    def _get_roi_bounds(self):
-        """Extract bounds from GeoJSON geometry and reproject to image CRS if needed."""
-        if not self.roi_geojson:
-            return None
-            
-        # Load GeoJSON
-        if isinstance(self.roi_geojson, str):
-            if self.roi_geojson.endswith('.geojson'):
-                with open(self.roi_geojson, 'r') as f:
-                    geojson_data = json.load(f)
-            else:
-                geojson_data = json.loads(self.roi_geojson)
-        else:
-            geojson_data = self.roi_geojson
-            
-        # Create OGR geometry from GeoJSON
-        if 'geometry' in geojson_data:
-            geometry = geojson_data['geometry']
-        elif 'type' in geojson_data and geojson_data['type'] in ['Polygon', 'MultiPolygon']:
-            geometry = geojson_data
-        else:
-            raise ValueError("Invalid GeoJSON format")
-            
-        geom = ogr.CreateGeometryFromJson(json.dumps(geometry))
-        
-        # Get ROI bounds in its original CRS (usually WGS84)
-        roi_envelope = geom.GetEnvelope()  # (minx, maxx, miny, maxy)
-        roi_bounds_wgs84 = (roi_envelope[0], roi_envelope[2], roi_envelope[1], roi_envelope[3])  # (minx, miny, maxx, maxy)
-        
-        # Get target CRS from first TIFF
-        if self.tiffs:
-            ds = gdal.Open(self.tiffs[0])
-            target_srs = osr.SpatialReference()
-            target_srs.ImportFromWkt(ds.GetProjection())
-            ds = None
-            
-            # Assume GeoJSON is in WGS84 (EPSG:4326)
-            source_srs = osr.SpatialReference()
-            source_srs.ImportFromEPSG(4326)
-            
-            # Transform ROI geometry to target CRS
-            transform = osr.CoordinateTransformation(source_srs, target_srs)
-            geom.Transform(transform)
-            
-            # Get transformed bounds
-            transformed_envelope = geom.GetEnvelope()
-            return (transformed_envelope[0], transformed_envelope[2], transformed_envelope[1], transformed_envelope[3])
-        
         return roi_bounds_wgs84
     def calcNormalizationBounds(self):
         def calculate_percentiles(data, percentiles=(1, 99)):
@@ -147,10 +90,6 @@ class DataAnalyser:
         return (minx, miny, maxx, maxy)
 
     def getTotalBounds(self):
-        if self.roi_bounds:
-            # If ROI is specified, use ROI bounds instead of image bounds
-            return self.roi_bounds
-            
         extents = []
         for path in self.tiffs:
             ds = gdal.Open(path)
@@ -158,42 +97,6 @@ class DataAnalyser:
             extents.append(bounds)
 
         # merge extents
-        minx = min(e[0] for e in extents)
-        miny = min(e[1] for e in extents)
-        maxx = max(e[2] for e in extents)
-        maxy = max(e[3] for e in extents)
-        return minx, miny, maxx, maxy
-    
-    def get_roi_intersection_bounds(self):
-        """Get the intersection between ROI and available imagery."""
-        if not self.roi_bounds:
-            return self.getTotalBounds()
-            
-        # Get actual image bounds
-        image_bounds = self._get_image_bounds()
-        roi_bounds = self.roi_bounds
-        
-        # Calculate intersection
-        minx = max(image_bounds[0], roi_bounds[0])
-        miny = max(image_bounds[1], roi_bounds[1])
-        maxx = min(image_bounds[2], roi_bounds[2])
-        maxy = min(image_bounds[3], roi_bounds[3])
-        
-        # Check if there's valid intersection
-        if minx >= maxx or miny >= maxy:
-            raise ValueError("ROI does not intersect with available imagery")
-            
-        return (minx, miny, maxx, maxy)
-    
-    def _get_image_bounds(self):
-        """Get bounds of available imagery (original getTotalBounds logic)."""
-        extents = []
-        for path in self.tiffs:
-            ds = gdal.Open(path)
-            bounds = self.getBounds(ds)
-            extents.append(bounds)
-            ds = None
-
         minx = min(e[0] for e in extents)
         miny = min(e[1] for e in extents)
         maxx = max(e[2] for e in extents)

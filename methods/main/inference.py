@@ -50,9 +50,7 @@ def execute(model_paths, config, verbose):
 
     tiffs = [os.path.join(src_folder, file) for file in os.listdir(src_folder) if (file.endswith(".tif") or file.endswith(".tiff"))]
     
-    # Check if ROI is specified in config
-    roi_geojson = config.get("roi_geojson", None)
-    analyser = DataAnalyser(tiffs, config["data_loader"]["bands"], config["super_resolution"], roi_geojson)
+    analyser = DataAnalyser(tiffs, config["data_loader"]["bands"], config["super_resolution"])
     
     if not analyser.isCompatible():
         logger.error(f"Incompatible tiff files. Ensure the same projection and pixel size fo each file in the folder.")
@@ -63,11 +61,6 @@ def execute(model_paths, config, verbose):
 
     config["data_loader"]["min"] = analyser.min
     config["data_loader"]["max"] = analyser.max
-
-    # Use ROI intersection bounds if ROI is specified
-    if roi_geojson:
-        analyser.total_bounds = analyser.get_roi_intersection_bounds()
-        logger.info(f"Processing ROI bounds: {analyser.total_bounds}")
 
     planner = ExecutionPlanner(analyser, config["execution_planner"])
 
